@@ -864,25 +864,64 @@ ORDER BY pontos DESC;
 -- 8. CONTROLE DE ACESSO (DCL)
 -- =====================================================================
 -- Questão 39
+CREATE USER IF NOT EXISTS 'filch'@'localhost'      IDENTIFIED BY 'MadameNorra#1';
+CREATE USER IF NOT EXISTS 'mcgonagall'@'localhost' IDENTIFIED BY 'Animago#Gato1';
+CREATE USER IF NOT EXISTS 'dumbledore'@'localhost' IDENTIFIED BY 'Fenix#Fawkes1';
 
 -- Questão 40
+GRANT SELECT ON hogwarts.vw_placar_casas TO 'filch'@'localhost';
 
 -- Questão 41
+GRANT INSERT, SELECT ON hogwarts.registro_pontos TO 'mcgonagall'@'localhost';
+GRANT SELECT         ON hogwarts.aluno           TO 'mcgonagall'@'localhost';
+GRANT SELECT         ON hogwarts.vw_boletim      TO 'mcgonagall'@'localhost';
 
 -- Questão 42
+GRANT ALL PRIVILEGES ON hogwarts.* TO 'dumbledore'@'localhost' WITH GRANT OPTION;
 
 -- Questão 43
+SHOW GRANTS FOR 'filch'@'localhost';
+SHOW GRANTS FOR 'mcgonagall'@'localhost';
 
 -- Questão 44
--- Resultado de cada comando:
+-- SELECT * FROM vw_placar_casas; → retorna o placar normalmente (permissão concedida)
+-- SELECT * FROM aluno;           → Erro 1142: SELECT command denied to user 'filch'@'localhost' for table 'aluno'
+-- Resultado de cada comando: o primeiro funciona pois filch tem SELECT na view;
+-- o segundo é bloqueado pois filch não tem permissão alguma sobre a tabela aluno.
 
 -- Questão 45
--- Como o trigger conseguiu atualizar a casa:
+-- (Executar como mcgonagall)
+-- INSERT INTO registro_pontos (id_aluno, id_prof, pontos, motivo, data_registro)
+-- VALUES (2, 1, 10, 'Ajudou um colega em Transfiguração', '2026-11-10');
+-- → Funciona: mcgonagall tem INSERT em registro_pontos e a Grifinória ganha os pontos.
+-- UPDATE casa SET pontos = 1000 WHERE id_casa = 1;
+-- → Erro 1142: UPDATE command denied to user 'mcgonagall'@'localhost' for table 'casa'
+-- Como o trigger conseguiu atualizar a casa: Triggers no MySQL executam com os
+-- privilégios do usuário DEFINER (quem criou o trigger, geralmente root), e não
+-- com os privilégios de quem disparou a operação. Por isso o trigger pôde fazer
+-- UPDATE em casa mesmo que a mcgonagall não tenha essa permissão diretamente.
 
 -- Questão 46
+REVOKE INSERT ON hogwarts.registro_pontos FROM 'mcgonagall'@'localhost';
+SHOW GRANTS FOR 'mcgonagall'@'localhost';
 
 -- Questão 47
--- Vantagem dos papéis:
+CREATE ROLE IF NOT EXISTS 'monitor';
+GRANT SELECT ON hogwarts.vw_boletim      TO 'monitor';
+GRANT SELECT ON hogwarts.vw_placar_casas TO 'monitor';
+
+CREATE USER IF NOT EXISTS 'percy'@'localhost' IDENTIFIED BY 'Monitor#Chefe1';
+GRANT 'monitor' TO 'percy'@'localhost';
+SET DEFAULT ROLE 'monitor' TO 'percy'@'localhost';
+-- Vantagem dos papéis: centralização e facilidade de manutenção. Se as permissões
+-- do papel 'monitor' precisarem mudar (adicionar ou revogar uma view, por exemplo),
+-- basta alterar o papel uma única vez e todos os usuários que o possuem são
+-- afetados automaticamente. Sem papéis seria necessário executar GRANT/REVOKE
+-- individualmente para cada monitor, aumentando o risco de inconsistência.
 
 -- Questão 48
-
+DROP USER IF EXISTS 'filch'@'localhost';
+DROP USER IF EXISTS 'mcgonagall'@'localhost';
+DROP USER IF EXISTS 'dumbledore'@'localhost';
+DROP USER IF EXISTS 'percy'@'localhost';
+DROP ROLE IF EXISTS 'monitor';
