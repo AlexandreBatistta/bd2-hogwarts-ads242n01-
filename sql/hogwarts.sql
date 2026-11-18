@@ -475,16 +475,49 @@ UPDATE professor SET data_admissao = '1993-08-15' WHERE nome = 'Rúbeo Hagrid';
 -- 5. CONTROLE DE TRANSAÇÕES (TCL)
 -- =====================================================================
 -- Questão 26
+START TRANSACTION;
+    UPDATE aluno SET saldo_galeoes = saldo_galeoes - 50 WHERE id_aluno = 5; -- Draco
+    UPDATE aluno SET saldo_galeoes = saldo_galeoes + 50 WHERE id_aluno = 6; -- Pansy
+COMMIT;
 
 -- Questão 27
+START TRANSACTION;
+    UPDATE casa SET pontos = 0;
+    SELECT nome_casa, pontos FROM casa; -- todos em 0
+ROLLBACK;
+SELECT nome_casa, pontos FROM casa;    -- placar restaurado
 
 -- Questão 28
+START TRANSACTION;
+    INSERT INTO compra (id_aluno, id_produto, quantidade, data_compra)
+    VALUES (1, 1, 1, '2026-11-10');
+    SELECT saldo_galeoes FROM aluno   WHERE id_aluno   = 1; -- 47.00
+    SELECT estoque       FROM produto WHERE id_produto = 1; -- 8
+ROLLBACK;
+SELECT saldo_galeoes FROM aluno   WHERE id_aluno   = 1; -- volta a 54.00
+SELECT estoque       FROM produto WHERE id_produto = 1; -- volta a 9
 
 -- Questão 29
+START TRANSACTION;
+    INSERT INTO registro_pontos (id_aluno, id_prof, pontos, motivo, data_registro)
+    VALUES (12, 4, 15, 'Cuidou das estufas no feriado', '2026-11-10');
+
+    SAVEPOINT sp_pontos_legitimos;
+
+    INSERT INTO registro_pontos (id_aluno, id_prof, pontos, motivo, data_registro)
+    VALUES (6, 2, 100, 'Favoritismo descarado', '2026-11-10');
+
+    ROLLBACK TO SAVEPOINT sp_pontos_legitimos;
+COMMIT;
 
 -- Questão 30
--- Resposta:
-
+SELECT @@autocommit;
+-- Resposta: O valor 1 indica que o autocommit está ativado: cada instrução SQL
+-- avulsa é confirmada automaticamente como uma transação própria, sem necessidade
+-- de COMMIT explícito. Quando se executa um comando DDL (como CREATE TABLE) dentro
+-- de uma transação aberta, o MySQL emite um COMMIT implícito antes de processar o
+-- DDL, tornando irretornáveis todas as alterações feitas até aquele ponto na
+-- transação.
 
 -- =====================================================================
 -- 6. DESAFIOS DE CONSULTA
