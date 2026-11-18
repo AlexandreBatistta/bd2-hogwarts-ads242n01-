@@ -312,35 +312,164 @@ WHERE id_disc NOT IN (
 -- =====================================================================
 -- 4. TRIGGERS
 -- =====================================================================
+DELIMITER $$
+
 -- Questão 20 - trg_pontos_casa
+CREATE TRIGGER trg_pontos_casa
+AFTER INSERT ON registro_pontos
+FOR EACH ROW
+BEGIN
+    UPDATE casa c
+    INNER JOIN aluno a ON a.id_casa = c.id_casa
+    SET c.pontos = c.pontos + NEW.pontos
+    WHERE a.id_aluno = NEW.id_aluno;
+END$$
 
 -- Questão 21 - trg_valida_compra
+CREATE TRIGGER trg_valida_compra
+BEFORE INSERT ON compra
+FOR EACH ROW
+BEGIN
+    DECLARE v_estoque INT;
+    DECLARE v_preco   DECIMAL(10,2);
+    DECLARE v_saldo   DECIMAL(10,2);
+
+    SELECT estoque, preco INTO v_estoque, v_preco
+    FROM produto WHERE id_produto = NEW.id_produto;
+
+    SELECT saldo_galeoes INTO v_saldo
+    FROM aluno WHERE id_aluno = NEW.id_aluno;
+
+    IF v_estoque < NEW.quantidade THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Estoque insuficiente no Beco Diagonal';
+    END IF;
+
+    IF v_saldo < (v_preco * NEW.quantidade) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Galeões insuficientes no cofre do aluno';
+    END IF;
+
+    SET NEW.valor_total = v_preco * NEW.quantidade;
+END$$
 
 -- Questão 22 - trg_baixa_compra
+CREATE TRIGGER trg_baixa_compra
+AFTER INSERT ON compra
+FOR EACH ROW
+BEGIN
+    UPDATE produto
+    SET estoque = estoque - NEW.quantidade
+    WHERE id_produto = NEW.id_produto;
+
+    UPDATE aluno
+    SET saldo_galeoes = saldo_galeoes - NEW.valor_total
+    WHERE id_aluno = NEW.id_aluno;
+END$$
 
 -- Questão 23 - trg_situacao_nota
+CREATE TRIGGER trg_situacao_nota
+BEFORE UPDATE ON matricula
+FOR EACH ROW
+BEGIN
+    IF NEW.nota >= 6 THEN
+        SET NEW.situacao = 'Aprovado';
+    ELSE
+        SET NEW.situacao = 'Reprovado';
+    END IF;
+END$$
 
 -- Questão 24 - trg_audita_salario
+CREATE TRIGGER trg_audita_salario
+AFTER UPDATE ON professor
+FOR EACH ROW
+BEGIN
+    IF OLD.salario <> NEW.salario THEN
+        INSERT INTO log_auditoria (tabela, operacao, descricao)
+        VALUES (
+            'professor',
+            'UPDATE',
+            CONCAT(NEW.nome, ': salário de ',
+                   FORMAT(OLD.salario, 2), ' para ',
+                   FORMAT(NEW.salario, 2))
+        );
+    END IF;
+END$$
+
+DELIMITER ;
 
 -- Pergunta para pensar: por que a validação é BEFORE e a baixa é AFTER?
--- Resposta:
+-- Resposta: O trigger BEFORE roda antes de o registro ser gravado no banco, o que
+-- permite cancelar a operação com SIGNAL se houver problema (estoque insuficiente
+-- ou saldo baixo) e também preencher NEW.valor_total antes da inserção. Se fosse
+-- AFTER, a linha já teria sido inserida e não seria mais possível bloqueá-la nem
+-- alterar seus campos. Já a baixa de estoque e saldo precisa ser AFTER porque só
+-- faz sentido descontar os valores depois que a compra foi confirmada e gravada
+-- com sucesso — se algo falhar no INSERT, o AFTER não dispara, evitando descontos
+-- sem compra registrada.
 
 -- Questão 25 - INSERT registro_pontos
+INSERT INTO registro_pontos (id_aluno, id_prof, pontos, motivo, data_registro) VALUES
+    ( 2, 3,  20, 'Feitiço de levitação perfeito',             '2026-09-10'),
+    ( 1, 2, -10, 'Atraso na aula de Poções',                  '2026-09-12'),
+    ( 5, 2,  15, 'Poção do Morto-Vivo impecável',             '2026-09-12'),
+    ( 8, 5,  10, 'Cuidou de um testrálio ferido',             '2026-09-20'),
+    (11, 4,  25, 'Ajudou os alunos do 1º ano',                '2026-09-25'),
+    ( 4, 4,  30, 'Identificou uma Mimbulus mimbletonia',      '2026-10-02'),
+    ( 6, 1, -20, 'Fora da cama após o toque de recolher',     '2026-10-05'),
+    ( 1, 6,  50, 'Conjurou um Patrono corpóreo',              '2026-10-15'),
+    ( 9, 3,  15, 'Duelo exemplar no Clube de Duelos',         '2026-10-18'),
+    ( 5, 1, -30, 'Duelo proibido no corredor',                '2026-10-31'),
+    (10, 7,   5, 'Interpretação da bola de cristal',          '2026-11-03'),
+    (13, 4,  10, 'Colheita de mandrágoras',                   '2026-11-05'),
+    ( 3, 9,  10, 'Identificou um bezoar',                     '2026-11-06'),
+    ( 8, 3,  20, 'Resposta brilhante sobre o Diadema',        '2026-11-08'),
+    ( 6, 2,  25, 'Antídoto para venenos comuns',              '2026-11-09'),
+    ( 5, 9,  40, 'Melhor poção do Clube do Slugue',           '2026-11-09');
 
 -- Questão 25 - INSERT compra
+INSERT INTO compra (id_aluno, id_produto, quantidade, data_compra) VALUES
+    ( 5, 2,  1, '2026-09-01'),
+    ( 2, 5,  2, '2026-09-02'),
+    ( 1, 3, 10, '2026-09-03'),
+    ( 3, 4,  5, '2026-09-03'),
+    ( 9, 8,  1, '2026-09-15'),
+    ( 8, 5,  1, '2026-09-20'),
+    (11, 1,  1, '2026-10-01'),
+    ( 6, 3, 20, '2026-10-10'),
+    ( 1, 7,  2, '2026-10-20'),
+    (13, 4, 10, '2026-11-02');
 
 -- Questão 25 - Rony tenta comprar a Nimbus
--- Resultado:
+-- INSERT INTO compra (id_aluno, id_produto, quantidade, data_compra)
+-- VALUES (3, 2, 1, '2026-11-01');
+-- Resultado: Erro 1644 - Galeões insuficientes no cofre do aluno
+-- Rony tem apenas 12.00 galeões e a Nimbus 2001 custa 300.00.
+-- O trigger trg_valida_compra detecta que saldo_galeoes < preco * quantidade
+-- e aborta a operação com SIGNAL antes de gravar a compra.
 
 -- Questão 25 - Hermione tenta comprar o caldeirão
--- Resultado:
+-- INSERT INTO compra (id_aluno, id_produto, quantidade, data_compra)
+-- VALUES (2, 6, 1, '2026-11-01');
+-- Resultado: Erro 1644 - Estoque insuficiente no Beco Diagonal
+-- O Caldeirão de Estanho (id 6) tem estoque = 0 (produto inativo).
+-- O trigger trg_valida_compra detecta estoque < quantidade e aborta.
 
 -- Questão 25 - Recuperação do Rony em Poções
+UPDATE matricula
+SET nota = 6.5
+WHERE id_aluno = 3 AND id_disc = 2;
+-- O trigger trg_situacao_nota recalcula automaticamente: nota 6.5 >= 6 → 'Aprovado'
+-- SELECT situacao FROM matricula WHERE id_aluno = 3 AND id_disc = 2; → Aprovado
 
 -- Questão 25 - Salário e data de admissão do Hagrid
--- Linhas em log_auditoria:
--- Por que o reajuste da questão 10 não aparece:
-
+UPDATE professor SET salario    = 5000.00       WHERE nome = 'Rúbeo Hagrid';
+UPDATE professor SET data_admissao = '1993-08-15' WHERE nome = 'Rúbeo Hagrid';
+-- Linhas em log_auditoria: 1
+-- Por que o reajuste da questão 10 não aparece: O trigger trg_audita_salario só
+-- existia a partir da questão 24. O UPDATE da questão 10 foi executado antes de
+-- o trigger ser criado, portanto não havia código para interceptá-lo e gravar
+-- o registro de auditoria.
 
 -- =====================================================================
 -- 5. CONTROLE DE TRANSAÇÕES (TCL)
