@@ -265,27 +265,49 @@ WHERE loja = 'Dedosdemel';
 -- 3. REMOÇÃO DE DADOS (DELETE) E TESTES DE RESTRIÇÕES
 -- =====================================================================
 -- Questão 13
--- Erro:
--- Explicação:
+-- DELETE FROM casa WHERE nome_casa = 'Sonserina';
+-- Erro: 1451 - Cannot delete or update a parent row: a foreign key constraint fails
+-- Explicação: Alunos (Draco, Pansy, Crabbe) e o professor Snape têm id_casa = 2
+-- (Sonserina). Como outras tabelas referenciam essa linha via FK, o banco bloqueia
+-- a exclusão para manter a integridade referencial.
 
 -- Questão 14
--- Erro:
--- Explicação:
+-- INSERT INTO aluno (nome, ano_escolar, id_casa) VALUES ('Dobby', 8, 1);
+-- Erro: 3819 - Check constraint 'aluno_chk_1' is violated
+-- Explicação: A coluna ano_escolar tem CHECK (ano_escolar BETWEEN 1 AND 7).
+-- O valor 8 está fora dessa faixa, portanto o banco rejeita o INSERT.
 
 -- Questão 15
--- Erro:
--- Explicação:
+-- INSERT INTO aluno (nome, ano_escolar, id_casa, email)
+-- VALUES ('Harry Potter (Polissuco)', 5, 1, 'harry.potter@hogwarts.edu');
+-- Erro: 1062 - Duplicate entry 'harry.potter@hogwarts.edu' for key 'uq_aluno_email'
+-- Explicação: A constraint UNIQUE adicionada na questão 7 impede dois alunos com
+-- o mesmo e-mail. Harry Potter (id 1) já possui esse endereço cadastrado.
 
 -- Questão 16
--- Erro:
--- Explicação:
+-- DELETE FROM professor WHERE nome = 'Severo Snape';
+-- Erro: 1451 - Cannot delete or update a parent row: a foreign key constraint fails
+-- Explicação: A disciplina 'Poções' (id_prof = 2) referencia Snape. Enquanto essa
+-- disciplina existir, o banco não permite excluir o professor referenciado.
 
 -- Questão 17
+DELETE FROM professor WHERE nome = 'Gilderoy Lockhart';
+-- Funciona porque nenhuma disciplina aponta para Lockhart (id_prof = 8): após a
+-- carga inicial, 'Estudo dos Trouxas' e 'Runas Antigas' têm id_prof NULL, então
+-- a remoção não viola nenhuma FK.
 
 -- Questão 18
+DELETE FROM matricula
+WHERE id_aluno IN (
+    SELECT id_aluno FROM aluno WHERE nome = 'Vicente Crabbe'
+);
+DELETE FROM aluno WHERE nome = 'Vicente Crabbe';
 
 -- Questão 19
-
+DELETE FROM disciplina
+WHERE id_disc NOT IN (
+    SELECT DISTINCT id_disc FROM matricula
+);
 
 -- =====================================================================
 -- 4. TRIGGERS
